@@ -12,3 +12,4 @@ wheels/
 .env
 qb_stalled_state.json
 *.log
+config.json
