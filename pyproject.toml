@@ -1,5 +1,5 @@
 [project]
-name = "qBittorrent helper"
+name = "qbittorrent-helper"
 version = "0.1.0"
 description = "qBittorrent helper"
 readme = "README.md"
