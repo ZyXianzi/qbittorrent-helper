@@ -22,6 +22,7 @@ The built-in modules today are:
 
 - `stalled_cleanup`: tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold
 - `disk_space_cleanup`: deletes the largest completed torrent when free disk space drops below a configured threshold, then resumes errored downloads
+- `tag_share_limit`: applies configured `seedingTimeLimit` values to torrents whose tags match configured rules
 
 ## Features
 
@@ -131,6 +132,36 @@ Default example behavior:
 
 This module is stateless. It is intended for environments where low disk space can leave downloads stuck in an error state until enough space is reclaimed.
 
+### `tag_share_limit`
+
+Applies a configured `seedingTimeLimit` to torrents when their tags match configured rules.
+
+Behavior:
+
+- configure a mapping of `tag -> seedingTimeLimit in minutes`
+- if a torrent matches one configured tag, use that rule
+- if a torrent matches multiple configured tags, use the shortest configured limit
+- if the torrent already has the desired `seedingTimeLimit`, no API call is made
+- this module is stateless
+
+Example:
+
+```toml
+[modules.tag_share_limit]
+enabled = true
+
+[modules.tag_share_limit.options.tag_seeding_time_limit_minutes]
+keep-1d = 1440
+keep-7d = 10080
+"保种 30 天" = 43200
+```
+
+Notes:
+
+- TOML supports UTF-8, so Chinese tag names can be written directly
+- if a tag contains spaces or special characters, quote the key
+- the tag text must exactly match the tag configured in qBittorrent
+
 ## Execution Model
 
 This is not a daemon.
@@ -192,6 +223,7 @@ qb_helper/
     base.py
     disk_space_cleanup.py
     stalled_cleanup.py
+    tag_share_limit.py
 deploy/systemd/
 config.example.toml
 ```
@@ -258,7 +290,38 @@ MIT
 当前内置模块：
 
 - `stalled_cleanup`：跟踪 `stalledDL` 状态的种子，达到阈值后打标签，再在更长时间后删除任务及文件
-- `disk_space_cleanup`：当磁盘可用空间低于阈值时，删除占用空间最大的已完成任务，并尝试恢复处于 `error` 的未完成下载
+- `disk_space_cleanup`：磁盘剩余空间低于阈值时，删除体积最大的已完成任务，然后恢复错误中的下载任务
+- `tag_share_limit`：当任务命中指定标签时，按配置设置 `seedingTimeLimit`
+
+### `tag_share_limit` 配置说明
+
+这个模块用于按照 tag 给任务设置保种时间上限。
+
+行为规则：
+
+- 配置形式是 `tag -> seedingTimeLimit（分钟）`
+- 如果一个任务只命中一个已配置 tag，就使用该规则
+- 如果一个任务同时命中多个已配置 tag，就取时间最短的那条规则
+- 如果当前任务的 `seedingTimeLimit` 已经是目标值，则不会重复调用 API
+- 该模块不需要持久化状态
+
+示例：
+
+```toml
+[modules.tag_share_limit]
+enabled = true
+
+[modules.tag_share_limit.options.tag_seeding_time_limit_minutes]
+保种1天 = 1440
+保种7天 = 10080
+"保种 30 天" = 43200
+```
+
+说明：
+
+- TOML 支持 UTF-8，所以中文 tag 可以直接写
+- 如果 tag 含有空格或特殊字符，建议给 key 加引号
+- 配置中的 tag 名必须和 qBittorrent 里的 tag 完全一致
 
 ### 功能特点
 

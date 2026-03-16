@@ -28,3 +28,10 @@ enabled = false
 
 [modules.disk_space_cleanup.options]
 min_free_space_gb = 20
+
+[modules.tag_share_limit]
+enabled = false
+
+[modules.tag_share_limit.options.tag_seeding_time_limit_minutes]
+keep-1d = 1440
+keep-7d = 10080

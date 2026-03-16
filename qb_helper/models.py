@@ -13,3 +13,4 @@ class Torrent:
     size: int
     amount_left: int
     tags: str
+    seeding_time_limit: int

@@ -44,6 +44,7 @@ class QBittorrentClient:
                 size=int(item.get("size", 0)),
                 amount_left=int(item.get("amount_left", 0)),
                 tags=item.get("tags", "") or "",
+                seeding_time_limit=int(item.get("seeding_time_limit", -2)),
             )
             for item in raw_items
         ]
@@ -96,6 +97,19 @@ class QBittorrentClient:
         response = self.session.post(
             f"{self.base_url}/api/v2/torrents/start",
             data={"hashes": "|".join(torrent_hashes)},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+
+    def set_seeding_time_limit(self, torrent_hash: str, minutes: int) -> None:
+        response = self.session.post(
+            f"{self.base_url}/api/v2/torrents/setShareLimits",
+            data={
+                "hashes": torrent_hash,
+                "ratioLimit": -2,
+                "seedingTimeLimit": minutes,
+                "inactiveSeedingTimeLimit": -2,
+            },
             timeout=self.timeout,
         )
         response.raise_for_status()
