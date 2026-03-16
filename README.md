@@ -215,4 +215,4 @@ qb_helper/
 
 ## License
 
-如需开源发布，建议补充许可证信息。
+MIT
