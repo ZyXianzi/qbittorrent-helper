@@ -82,6 +82,7 @@ This repository uses:
 
 - `pre-commit` on staged files for `ruff-check` and `ruff-format`
 - `pre-commit` on staged Python files for `ty check`
+- `pre-push` for the full `pytest` unit test suite
 
 To run everything manually:
 
@@ -91,7 +92,8 @@ uv run ty check main.py qb_helper
 ```
 
 Local hooks operate on the files staged for the current commit.
-The GitHub Actions workflow checks only files changed in the current push or pull request.
+The installed git hooks include both `pre-commit` and `pre-push`.
+GitHub Actions runs changed-file quality checks plus the full unit test suite on every push and pull request.
 
 ## Quick Start
 
@@ -298,7 +300,8 @@ uv run pre-commit install --install-hooks
 Hook policy:
 
 - `pre-commit` runs `ruff-check`, `ruff-format`, and `ty check` on staged files
-- CI reruns checks for files changed in the current pull request or push to `main`
+- `pre-push` runs the full `pytest` suite
+- CI reruns changed-file checks plus full unit tests on every push and pull request
 
 ## License
 
