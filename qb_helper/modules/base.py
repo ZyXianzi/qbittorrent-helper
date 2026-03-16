@@ -25,5 +25,6 @@ class ModuleResult:
 class HelperModule(Protocol):
     name: str
 
-    def run(self, context: ModuleContext, previous_state: dict[str, Any]) -> ModuleResult:
-        ...
+    def run(
+        self, context: ModuleContext, previous_state: dict[str, Any]
+    ) -> ModuleResult: ...

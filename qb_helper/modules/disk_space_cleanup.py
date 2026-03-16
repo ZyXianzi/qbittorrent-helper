@@ -24,7 +24,7 @@ class DiskSpaceCleanupSettings:
         return self.min_free_space_gb * 1024**3
 
     @classmethod
-    def from_options(cls, options: dict[str, Any]) -> "DiskSpaceCleanupSettings":
+    def from_options(cls, options: dict[str, Any]) -> DiskSpaceCleanupSettings:
         min_free_space_gb = options.get("min_free_space_gb")
         if not isinstance(min_free_space_gb, int) or min_free_space_gb <= 0:
             raise ValueError(

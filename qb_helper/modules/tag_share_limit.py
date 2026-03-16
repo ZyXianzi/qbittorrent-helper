@@ -15,7 +15,7 @@ class TagShareLimitSettings:
     tag_seeding_time_limit_minutes: dict[str, int]
 
     @classmethod
-    def from_options(cls, options: dict[str, Any]) -> "TagShareLimitSettings":
+    def from_options(cls, options: dict[str, Any]) -> TagShareLimitSettings:
         raw_mapping = options.get("tag_seeding_time_limit_minutes")
         if not isinstance(raw_mapping, dict) or not raw_mapping:
             raise ValueError(

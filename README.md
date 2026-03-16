@@ -71,6 +71,25 @@ uv sync
 
 If you are not using `uv`, install dependencies from `pyproject.toml` with your preferred workflow.
 
+For local development checks, install dev tools and git hooks once per clone:
+
+```bash
+uv sync --dev
+uv run pre-commit install --install-hooks
+```
+
+This repository uses:
+
+- `pre-commit` on staged files for `ruff-check` and `ruff-format`
+- `pre-commit` for `ty check`
+
+To run everything manually:
+
+```bash
+uv run pre-commit run --all-files
+uv run ty check main.py qb_helper
+```
+
 ## Quick Start
 
 1. Create a config file:
@@ -265,6 +284,18 @@ If you plan to contribute a new module:
 - respect global `dry_run`
 - keep module state isolated to its own subtree
 - avoid pushing policy into the qBittorrent client layer
+
+Contributors should install local hooks before committing:
+
+```bash
+uv sync --dev
+uv run pre-commit install --install-hooks
+```
+
+Hook policy:
+
+- `pre-commit` runs `ruff-check`, `ruff-format`, and `ty check`
+- CI reruns the same checks on pull requests and pushes to `main`
 
 ## License
 

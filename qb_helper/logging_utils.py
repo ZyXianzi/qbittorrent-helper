@@ -63,7 +63,9 @@ def setup_logging(config: LoggingConfig) -> logging.Logger:
     logger.filters.clear()
     logger.propagate = False
 
-    formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(module_name)s] %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] [%(module_name)s] %(message)s"
+    )
     module_filter = ModuleNameFilter()
 
     console_handler = logging.StreamHandler(sys.stdout)
@@ -86,5 +88,7 @@ def setup_logging(config: LoggingConfig) -> logging.Logger:
     return logger
 
 
-def get_module_logger(base_logger: logging.Logger, module_name: str) -> logging.LoggerAdapter:
+def get_module_logger(
+    base_logger: logging.Logger, module_name: str
+) -> logging.LoggerAdapter:
     return logging.LoggerAdapter(base_logger, {"module_name": module_name})

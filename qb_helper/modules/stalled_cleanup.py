@@ -7,7 +7,9 @@ from qb_helper.modules.base import ModuleContext, ModuleResult
 
 
 def has_tag(existing_tags: str, target_tag: str) -> bool:
-    return target_tag in [tag.strip() for tag in existing_tags.split(",") if tag.strip()]
+    return target_tag in [
+        tag.strip() for tag in existing_tags.split(",") if tag.strip()
+    ]
 
 
 @dataclass(frozen=True)
@@ -17,17 +19,23 @@ class StalledCleanupSettings:
     candidate_tag: str
 
     @classmethod
-    def from_options(cls, options: dict[str, Any]) -> "StalledCleanupSettings":
+    def from_options(cls, options: dict[str, Any]) -> StalledCleanupSettings:
         candidate_seconds = options.get("candidate_seconds")
         delete_seconds = options.get("delete_seconds")
         candidate_tag = options.get("candidate_tag")
 
         if not isinstance(candidate_seconds, int):
-            raise ValueError("modules.stalled_cleanup.options.candidate_seconds must be an integer")
+            raise ValueError(
+                "modules.stalled_cleanup.options.candidate_seconds must be an integer"
+            )
         if not isinstance(delete_seconds, int):
-            raise ValueError("modules.stalled_cleanup.options.delete_seconds must be an integer")
+            raise ValueError(
+                "modules.stalled_cleanup.options.delete_seconds must be an integer"
+            )
         if not isinstance(candidate_tag, str) or not candidate_tag.strip():
-            raise ValueError("modules.stalled_cleanup.options.candidate_tag must be a non-empty string")
+            raise ValueError(
+                "modules.stalled_cleanup.options.candidate_tag must be a non-empty string"
+            )
 
         return cls(
             candidate_seconds=candidate_seconds,
@@ -42,7 +50,9 @@ class StalledCleanupModule:
     def __init__(self, options: dict[str, Any]) -> None:
         self.settings = StalledCleanupSettings.from_options(options)
 
-    def run(self, context: ModuleContext, previous_state: dict[str, Any]) -> ModuleResult:
+    def run(
+        self, context: ModuleContext, previous_state: dict[str, Any]
+    ) -> ModuleResult:
         now = context.now
         torrents_by_hash = {torrent.hash: torrent for torrent in context.torrents}
         next_state: dict[str, dict[str, Any]] = {}
@@ -95,9 +105,8 @@ class StalledCleanupModule:
                 torrent.state,
             )
 
-            if (
-                stalled_duration >= self.settings.candidate_seconds
-                and not has_tag(torrent.tags, self.settings.candidate_tag)
+            if stalled_duration >= self.settings.candidate_seconds and not has_tag(
+                torrent.tags, self.settings.candidate_tag
             ):
                 self._add_candidate_tag(
                     context,
@@ -125,7 +134,9 @@ class StalledCleanupModule:
         context.logger.info("Done. tracked_stalled=%d", len(next_state))
         return ModuleResult(state=next_state)
 
-    def _remove_candidate_tag(self, context: ModuleContext, torrent_hash: str, torrent_name: str) -> None:
+    def _remove_candidate_tag(
+        self, context: ModuleContext, torrent_hash: str, torrent_name: str
+    ) -> None:
         if context.dry_run:
             context.logger.info(
                 "[DRY RUN] Would remove tag '%s' from recovered torrent: %s",
@@ -142,7 +153,9 @@ class StalledCleanupModule:
                 torrent_name,
             )
         except Exception as exc:
-            context.logger.exception("Failed to remove tag from %s: %s", torrent_name, exc)
+            context.logger.exception(
+                "Failed to remove tag from %s: %s", torrent_name, exc
+            )
 
     def _add_candidate_tag(
         self,
@@ -200,4 +213,6 @@ class StalledCleanupModule:
                 stalled_duration,
             )
         except Exception as exc:
-            context.logger.exception("Failed to delete torrent %s: %s", torrent_name, exc)
+            context.logger.exception(
+                "Failed to delete torrent %s: %s", torrent_name, exc
+            )
