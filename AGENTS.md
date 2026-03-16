@@ -1,5 +1,7 @@
 # AGENTS.md
 
+Always use Context7 when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
+
 ## Project Purpose
 
 This project is a qBittorrent helper designed to run as a short-lived scheduled job every 5 minutes.
@@ -10,7 +12,10 @@ Its responsibilities are operational and maintenance-oriented:
 - log what happened
 - persist lightweight module state between runs
 
-The current built-in module is `stalled_cleanup`, which tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold.
+The current built-in modules are:
+
+- `stalled_cleanup`, which tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold
+- `disk_space_cleanup`, which deletes the largest completed torrent when free disk space falls below a configured threshold and then resumes errored downloads
 
 ## Runtime Model
 
@@ -54,6 +59,8 @@ This is not a daemon. Design changes should assume the process starts fresh on e
   - module context and module result contracts
 - `qb_helper/modules/stalled_cleanup.py`
   - first built-in module
+- `qb_helper/modules/disk_space_cleanup.py`
+  - disk pressure cleanup and download resume module
 - `qb_helper/modules/__init__.py`
   - module registry
 

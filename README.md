@@ -18,9 +18,10 @@ Each run:
 5. executes enabled helper modules
 6. writes next state back to disk
 
-The built-in module today is:
+The built-in modules today are:
 
 - `stalled_cleanup`: tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold
+- `disk_space_cleanup`: deletes the largest completed torrent when free disk space drops below a configured threshold, then resumes errored downloads
 
 ## Features
 
@@ -117,6 +118,19 @@ Default behavior:
 - clear state if the torrent recovers or disappears
 - remove the candidate tag if a tracked torrent recovers
 
+### `disk_space_cleanup`
+
+Monitors qBittorrent reported free disk space.
+
+Default example behavior:
+
+- when free disk space drops below `min_free_space_gb`
+- delete the largest completed torrent and its files
+- refresh the torrent list
+- resume any incomplete torrents currently in `error`
+
+This module is stateless. It is intended for environments where low disk space can leave downloads stuck in an error state until enough space is reclaimed.
+
 ## Execution Model
 
 This is not a daemon.
@@ -176,6 +190,7 @@ qb_helper/
   modules/
     __init__.py
     base.py
+    disk_space_cleanup.py
     stalled_cleanup.py
 deploy/systemd/
 config.example.toml
@@ -243,6 +258,7 @@ MIT
 当前内置模块：
 
 - `stalled_cleanup`：跟踪 `stalledDL` 状态的种子，达到阈值后打标签，再在更长时间后删除任务及文件
+- `disk_space_cleanup`：当磁盘可用空间低于阈值时，删除占用空间最大的已完成任务，并尝试恢复处于 `error` 的未完成下载
 
 ### 功能特点
 

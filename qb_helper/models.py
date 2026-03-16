@@ -10,4 +10,6 @@ class Torrent:
     state: str
     progress: float
     added_on: int
+    size: int
+    amount_left: int
     tags: str

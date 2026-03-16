@@ -22,3 +22,9 @@ enabled = true
 candidate_seconds = 3600
 delete_seconds = 7200
 candidate_tag = "stalled-long"
+
+[modules.disk_space_cleanup]
+enabled = false
+
+[modules.disk_space_cleanup.options]
+min_free_space_gb = 20
