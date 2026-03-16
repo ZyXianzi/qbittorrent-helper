@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# IDE
+.idea/
+
 /logs
 /data
 config.json
