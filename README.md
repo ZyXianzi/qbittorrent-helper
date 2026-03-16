@@ -8,7 +8,7 @@
 
 - 基于 qBittorrent Web API 工作
 - 短生命周期脚本，适合 `systemd timer`
-- 支持 JSON 配置
+- 支持 TOML 配置
 - 支持模块化扩展
 - 支持全局 `dry_run`
 - 自动轮转并清理旧日志
@@ -34,18 +34,18 @@ uv sync
 ### 2. Create config
 
 ```bash
-cp config.example.json config.json
+cp config.example.toml config.toml
 ```
 
-配置字段和默认示例请直接参考 `config.example.json`。
+配置字段和默认示例请直接参考 `config.example.toml`。
 
 ### 3. Run
 
 ```bash
-uv run python main.py --config ./config.json
+uv run python main.py --config ./config.toml
 ```
 
-建议先使用 `dry_run: true` 观察日志，确认行为符合预期后再改为 `false`。
+建议先使用 `dry_run = true` 观察日志，确认行为符合预期后再改为 `false`。
 
 ## How It Works
 
@@ -77,7 +77,8 @@ uv run python main.py --config ./config.json
 
 注意：
 
-- 配置文件使用 JSON，不使用 `.env`
+- 配置文件使用 TOML，不使用 `.env`
+- 运行时 state file 继续使用 JSON
 - 相对路径基于当前工作目录解析
 - 生产环境建议对日志和状态文件使用绝对路径
 
@@ -103,12 +104,12 @@ uv run python main.py --config ./config.json
 ```bash
 cd /home/youruser/qbittorrent-helper
 uv sync
-cp config.example.json config.json
+cp config.example.toml config.toml
 ```
 
 建议：
 
-- 将 `config.json` 里的日志和状态文件路径改为绝对路径
+- 将 `config.toml` 里的日志和状态文件路径改为绝对路径
 - 先把 `runtime.dry_run` 设为 `true`
 - 确保运行用户对日志目录和状态文件目录有写权限
 
@@ -131,7 +132,7 @@ sudo cp deploy/systemd/qb-helper.timer.example /etc/systemd/system/qb-helper.tim
 `ExecStart` 推荐直接指向虚拟环境中的 Python：
 
 ```ini
-ExecStart=/home/youruser/qbittorrent-helper/.venv/bin/python /home/youruser/qbittorrent-helper/main.py --config /home/youruser/qbittorrent-helper/config.json
+ExecStart=/home/youruser/qbittorrent-helper/.venv/bin/python /home/youruser/qbittorrent-helper/main.py --config /home/youruser/qbittorrent-helper/config.toml
 ```
 
 ### 3. 启用定时器

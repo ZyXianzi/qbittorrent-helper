@@ -18,7 +18,7 @@ The current built-in module is `stalled_cleanup`, which tracks torrents in `stal
 - Main runner: `qb_helper/runner.py`
 - Expected execution mode: short-lived process invoked by a scheduler such as `systemd timer` or cron
 - Typical deployment command:
-  - `/path/to/.venv/bin/python /path/to/main.py --config /path/to/config.json`
+  - `/path/to/.venv/bin/python /path/to/main.py --config /path/to/config.toml`
 
 This is not a daemon. Design changes should assume the process starts fresh on each run.
 
@@ -27,7 +27,7 @@ This is not a daemon. Design changes should assume the process starts fresh on e
 ### High-level flow
 
 1. `main.py` calls `qb_helper.runner.main()`
-2. runner loads JSON config
+2. runner loads TOML config
 3. runner initializes logging
 4. runner loads persisted state from disk
 5. runner logs into qBittorrent and fetches torrent list once
@@ -41,7 +41,7 @@ This is not a daemon. Design changes should assume the process starts fresh on e
 - `qb_helper/runner.py`
   - orchestration, config loading, module execution, state save
 - `qb_helper/config.py`
-  - JSON config schema loading and validation
+  - TOML config schema loading and validation
 - `qb_helper/logging_utils.py`
   - shared logger setup and log retention handling
 - `qb_helper/client.py`
@@ -59,7 +59,7 @@ This is not a daemon. Design changes should assume the process starts fresh on e
 
 ## Configuration
 
-Configuration is JSON-based. The example template is `config.example.json`.
+Configuration is TOML-based. The example template is `config.example.toml`.
 
 Top-level sections:
 
@@ -75,6 +75,7 @@ Top-level sections:
 Important notes:
 
 - `.env` is no longer used.
+- Runtime state remains JSON-based in the state file.
 - Relative paths in config are resolved relative to the current working directory of the process.
 - For scheduled deployments, prefer absolute paths or set the working directory explicitly before execution.
 
@@ -203,7 +204,7 @@ Recommended `systemd` deployment shape:
 [Service]
 Type=oneshot
 WorkingDirectory=/home/sylvan/qb-cleaner
-ExecStart=/home/sylvan/qb-cleaner/.venv/bin/python /home/sylvan/qb-cleaner/main.py --config /home/sylvan/qb-cleaner/config.json
+ExecStart=/home/sylvan/qb-cleaner/.venv/bin/python /home/sylvan/qb-cleaner/main.py --config /home/sylvan/qb-cleaner/config.toml
 
 [Timer]
 OnCalendar=*:0/5
@@ -223,7 +224,7 @@ Persistent=true
 ## Known History / Migration Notes
 
 - the project started as a single-file script
-- environment-variable config was replaced by JSON config
+- environment-variable config was replaced by TOML config
 - entrypoint was changed from `qb_stalled_cleaner.py` to `main.py`
 - log retention was fixed to work correctly for cron-style short executions
 

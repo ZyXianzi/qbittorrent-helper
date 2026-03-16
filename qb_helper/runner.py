@@ -22,7 +22,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--config",
         type=Path,
         default=DEFAULT_CONFIG_PATH,
-        help="Path to JSON config file",
+        help="Path to TOML config file",
     )
     return parser.parse_args(argv)
 
@@ -72,12 +72,18 @@ def main(argv: list[str] | None = None) -> int:
 
     for module_name, module_config in config.modules.items():
         if not module_config.enabled:
-            logger.info("Module disabled: %s", module_name, extra={"module_name": module_name})
+            logger.info(
+                "Module disabled: %s", module_name, extra={"module_name": module_name}
+            )
             continue
 
         module_class = MODULE_REGISTRY.get(module_name)
         if module_class is None:
-            logger.warning("Unknown module in config: %s", module_name, extra={"module_name": module_name})
+            logger.warning(
+                "Unknown module in config: %s",
+                module_name,
+                extra={"module_name": module_name},
+            )
             failed_modules = True
             continue
 

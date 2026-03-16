@@ -8,5 +8,5 @@ Type=oneshot
 User=youruser
 Group=youruser
 WorkingDirectory=/home/youruser/qbittorrent-helper
-ExecStart=/home/youruser/qbittorrent-helper/.venv/bin/python /home/youruser/qbittorrent-helper/main.py --config /home/youruser/qbittorrent-helper/config.json
+ExecStart=/home/youruser/qbittorrent-helper/.venv/bin/python /home/youruser/qbittorrent-helper/main.py --config /home/youruser/qbittorrent-helper/config.toml
 TimeoutStartSec=120

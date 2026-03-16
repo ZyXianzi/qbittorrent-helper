@@ -1,0 +1,24 @@
+[qbittorrent]
+url = "http://127.0.0.1:8080"
+username = "admin"
+password = "your-web-ui-password"
+request_timeout = 15
+
+[logging]
+file = "./logs/qb-helper.log"
+level = "INFO"
+retention_hours = 24
+rotate_when = "H"
+rotate_interval = 1
+
+[runtime]
+state_file = "./data/qb-helper-state.json"
+dry_run = true
+
+[modules.stalled_cleanup]
+enabled = true
+
+[modules.stalled_cleanup.options]
+candidate_seconds = 3600
+delete_seconds = 7200
+candidate_tag = "stalled-long"
