@@ -1,7 +1,7 @@
 [project]
 name = "qbittorrent-helper"
-version = "0.1.0"
-description = "qBittorrent helper"
+version = "0.0.3"
+description = "A lightweight qBittorrent helper for scheduled cleanup and maintenance tasks."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
