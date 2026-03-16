@@ -1,198 +1,166 @@
 # qBittorrent Helper
 
-`qBittorrent Helper` 是一个面向运维场景的轻量脚本，用来定时检查 qBittorrent 中的任务并执行自动化清理。
+Lightweight qBittorrent maintenance helper for short-lived scheduled runs.
 
-它适合在 Linux 上由 `systemd timer` 周期性触发运行，而不是作为常驻进程部署。
+[中文说明](#中文说明)
+
+## Overview
+
+qBittorrent Helper is a small Python tool for operational automation around qBittorrent.
+It is designed to run as a short-lived job every few minutes through `systemd timer` or `cron`, rather than as a long-running daemon.
+
+Each run:
+
+1. loads TOML configuration
+2. loads persisted module state from disk
+3. logs into qBittorrent Web API
+4. fetches the current torrent list once
+5. executes enabled helper modules
+6. writes next state back to disk
+
+The built-in module today is:
+
+- `stalled_cleanup`: tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold
 
 ## Features
 
-- 基于 qBittorrent Web API 工作
-- 短生命周期脚本，适合 `systemd timer`
-- 支持 TOML 配置
-- 支持模块化扩展
-- 支持全局 `dry_run`
-- 自动轮转并清理旧日志
-- 持久化模块状态，跨多次运行连续判断
+- Short-lived process model suitable for `systemd timer` or `cron`
+- TOML-based configuration
+- Lightweight JSON state persisted across runs
+- Modular helper architecture
+- Global `dry_run` mode for safe rollout
+- Shared structured logging with module tags
+- Timed log rotation plus proactive retention cleanup for cron-style execution
 
-当前内置模块：
+## Why This Exists
 
-- `stalled_cleanup`: 跟踪 `stalledDL` 的种子，达到阈值后打标签，再在更长时间后删除任务及文件
+qBittorrent exposes useful torrent states, but many maintenance policies are environment-specific.
+This project provides a simple place to implement those policies without turning them into a permanent service.
 
-## Quick Start
+The focus is operational reliability:
 
-### 1. Install
+- minimal moving parts
+- explicit config validation
+- defensive state handling
+- scheduler-friendly execution model
 
-要求：
+## Safety Model
+
+This project can perform destructive actions, including deleting torrents and downloaded files.
+
+Recommended rollout:
+
+1. start with `runtime.dry_run = true`
+2. review logs for several scheduler cycles
+3. confirm your thresholds and tag behavior
+4. switch `dry_run` to `false` only after validation
+
+## Requirements
 
 - Python 3.12+
-- 已启用 qBittorrent Web UI
+- qBittorrent with Web UI enabled
+- Network access from this job to the qBittorrent Web API
+
+## Installation
 
 ```bash
 uv sync
 ```
 
-### 2. Create config
+If you are not using `uv`, install dependencies from `pyproject.toml` with your preferred workflow.
+
+## Quick Start
+
+1. Create a config file:
 
 ```bash
 cp config.example.toml config.toml
 ```
 
-配置字段和默认示例请直接参考 `config.example.toml`。
+2. Edit `config.toml` for your environment.
 
-### 3. Run
+3. Run once manually:
 
 ```bash
 uv run python main.py --config ./config.toml
 ```
 
-建议先使用 `dry_run = true` 观察日志，确认行为符合预期后再改为 `false`。
-
-## How It Works
-
-每次运行会：
-
-1. 读取配置和状态文件
-2. 登录 qBittorrent
-3. 获取当前 torrent 列表
-4. 执行已启用模块
-5. 写入新的状态文件
-
-`stalled_cleanup` 的默认策略：
-
-- 第一次看到 `stalledDL` 时开始计时
-- 达到 `candidate_seconds` 后打上 `candidate_tag`
-- 达到 `delete_seconds` 后删除 torrent 和文件
-- 如果任务恢复，则清除跟踪状态，并尝试移除标签
+4. Review logs before enabling scheduled execution.
 
 ## Configuration
 
-顶层配置分为四部分：
+Top-level config sections:
 
-- `qbittorrent`: Web UI 地址、用户名、密码、请求超时
-- `logging`: 日志路径、级别、轮转与保留策略
-- `runtime`: 状态文件路径、全局 `dry_run`
-- `modules`: 各模块开关与参数
+- `qbittorrent`: server URL, credentials, request timeout
+- `logging`: log file path, level, rotation, retention
+- `runtime`: state file path and global `dry_run`
+- `modules`: per-module enable flag and options
 
-`dry_run` 为全局行为开关。开启后会正常读取任务并记录计划动作，但不会真的修改 qBittorrent。
+Important notes:
 
-注意：
+- Configuration format is TOML
+- Runtime state is stored as JSON
+- Relative paths are resolved from the process working directory
+- For scheduled deployments, absolute paths are strongly recommended
 
-- 配置文件使用 TOML，不使用 `.env`
-- 运行时 state file 继续使用 JSON
-- 相对路径基于当前工作目录解析
-- 生产环境建议对日志和状态文件使用绝对路径
+## Built-in Module
+
+### `stalled_cleanup`
+
+Tracks torrents whose qBittorrent state is `stalledDL`.
+
+Default behavior:
+
+- start tracking when a torrent is first seen in `stalledDL`
+- add a candidate tag after `candidate_seconds`
+- delete the torrent and files after `delete_seconds`
+- clear state if the torrent recovers or disappears
+- remove the candidate tag if a tracked torrent recovers
+
+## Execution Model
+
+This is not a daemon.
+The process is expected to start fresh, do its work quickly, persist state, and exit.
+
+Typical deployment command:
+
+```bash
+/path/to/.venv/bin/python /path/to/main.py --config /path/to/config.toml
+```
 
 ## Deployment
 
-推荐部署方式为 Linux `systemd timer`。
-
-仓库中提供了示例文件：
+`systemd timer` is the recommended deployment model.
+Example unit files are included in:
 
 - `deploy/systemd/qb-helper.service.example`
 - `deploy/systemd/qb-helper.timer.example`
 
-### 1. 准备目录与配置
-
-假设项目部署在：
-
-```text
-/home/youruser/qbittorrent-helper
-```
-
-先安装依赖并准备配置：
-
-```bash
-cd /home/youruser/qbittorrent-helper
-uv sync
-cp config.example.toml config.toml
-```
-
-建议：
-
-- 将 `config.toml` 里的日志和状态文件路径改为绝对路径
-- 先把 `runtime.dry_run` 设为 `true`
-- 确保运行用户对日志目录和状态文件目录有写权限
-
-### 2. 安装 service 和 timer
-
-复制示例文件到 `systemd` 目录：
-
-```bash
-sudo cp deploy/systemd/qb-helper.service.example /etc/systemd/system/qb-helper.service
-sudo cp deploy/systemd/qb-helper.timer.example /etc/systemd/system/qb-helper.timer
-```
-
-然后按实际部署修改下面这些字段：
-
-- `User`
-- `Group`
-- `WorkingDirectory`
-- `ExecStart`
-
-`ExecStart` 推荐直接指向虚拟环境中的 Python：
+Typical service shape:
 
 ```ini
+[Service]
+Type=oneshot
+WorkingDirectory=/home/youruser/qbittorrent-helper
 ExecStart=/home/youruser/qbittorrent-helper/.venv/bin/python /home/youruser/qbittorrent-helper/main.py --config /home/youruser/qbittorrent-helper/config.toml
 ```
 
-### 3. 启用定时器
+Typical timer shape:
 
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now qb-helper.timer
+```ini
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
 ```
 
-查看定时器是否已注册：
+Why `systemd timer` over `cron`:
 
-```bash
-systemctl list-timers qb-helper.timer
-```
+- explicit `WorkingDirectory`
+- clearer execution logs with `journalctl`
+- better service ownership and environment control
+- missed runs can be replayed with `Persistent=true`
 
-### 4. 手动测试一次 service
-
-在真正依赖定时器之前，建议先手动跑一次：
-
-```bash
-sudo systemctl start qb-helper.service
-sudo systemctl status qb-helper.service
-```
-
-查看日志：
-
-```bash
-journalctl -u qb-helper.service -n 100 --no-pager
-```
-
-### 5. 日常运维命令
-
-重新加载 unit 文件：
-
-```bash
-sudo systemctl daemon-reload
-```
-
-重启 timer：
-
-```bash
-sudo systemctl restart qb-helper.timer
-```
-
-停止 timer：
-
-```bash
-sudo systemctl disable --now qb-helper.timer
-```
-
-### Why systemd timer Instead of cron
-
-相比 `cron`，`systemd timer` 更适合这个项目：
-
-- 可以明确指定 `WorkingDirectory`、运行用户和启动命令
-- 可以通过 `journalctl` 直接查看执行日志和失败原因
-- `Persistent=true` 可以在机器错过执行窗口后补跑
-- 更适合把部署方式纳入版本管理和运维文档
-
-这个项目仍然是短生命周期任务。`systemd` 这里只负责定时拉起它，不代表要把它改成常驻服务。
+`cron` is still supported if it better matches your environment.
 
 ## Project Layout
 
@@ -204,15 +172,170 @@ qb_helper/
   client.py
   logging_utils.py
   state.py
+  models.py
   modules/
+    __init__.py
+    base.py
     stalled_cleanup.py
+deploy/systemd/
+config.example.toml
 ```
+
+## Logging
+
+Log lines include a module tag:
+
+```text
+timestamp [LEVEL] [module_name] message
+```
+
+Examples:
+
+- `[app]` for runner-level logs
+- `[stalled_cleanup]` for module logs
+
+Log retention is enforced proactively on each run so old rotated files are cleaned up even though the process is short-lived.
 
 ## Exit Codes
 
-- `0`: 本次运行成功
-- `1`: 配置错误、qBittorrent 通信失败、状态保存失败或模块执行失败
+- `0`: run completed successfully
+- `1`: config load failure, qBittorrent communication failure, module failure, or state save failure
+
+## Roadmap Ideas
+
+- additional maintenance modules
+- more module-level safety checks
+- tests for config parsing and module state transitions
+
+## Contributing
+
+Issues and pull requests are welcome.
+
+If you plan to contribute a new module:
+
+- keep the short-lived scheduler model intact
+- validate module options explicitly
+- respect global `dry_run`
+- keep module state isolated to its own subtree
+- avoid pushing policy into the qBittorrent client layer
 
 ## License
+
+MIT
+
+---
+
+## 中文说明
+
+`qBittorrent Helper` 是一个面向运维场景的轻量工具，用于定时检查 qBittorrent 任务并执行自动化维护动作。
+
+它的设计目标不是常驻运行，而是作为一个短生命周期任务，由 `systemd timer` 或 `cron` 每隔几分钟拉起一次。
+
+每次运行会：
+
+1. 读取 TOML 配置
+2. 读取磁盘上的模块状态
+3. 登录 qBittorrent Web API
+4. 获取当前 torrent 列表
+5. 执行已启用模块
+6. 写回新的状态
+
+当前内置模块：
+
+- `stalled_cleanup`：跟踪 `stalledDL` 状态的种子，达到阈值后打标签，再在更长时间后删除任务及文件
+
+### 功能特点
+
+- 适合 `systemd timer` 或 `cron` 的短生命周期执行模式
+- 使用 TOML 配置
+- 使用轻量 JSON 持久化模块状态
+- 支持模块化扩展
+- 提供全局 `dry_run` 安全开关
+- 统一日志格式，并带模块标识
+- 支持日志轮转和基于保留时间的主动清理
+
+### 安全建议
+
+这个项目可能执行破坏性操作，包括删除 torrent 和本地文件。
+
+建议上线流程：
+
+1. 先设置 `runtime.dry_run = true`
+2. 连续观察多个调度周期的日志
+3. 确认阈值、标签和行为符合预期
+4. 再切换为 `false`
+
+### 运行要求
+
+- Python 3.12+
+- 已启用 qBittorrent Web UI
+- 当前任务所在机器能访问 qBittorrent Web API
+
+### 快速开始
+
+安装依赖：
+
+```bash
+uv sync
+```
+
+复制配置：
+
+```bash
+cp config.example.toml config.toml
+```
+
+手动运行一次：
+
+```bash
+uv run python main.py --config ./config.toml
+```
+
+建议先观察日志，再启用定时调度。
+
+### 配置结构
+
+顶层配置包括：
+
+- `qbittorrent`：服务地址、用户名、密码、超时
+- `logging`：日志路径、级别、轮转、保留策略
+- `runtime`：状态文件路径和全局 `dry_run`
+- `modules`：模块开关和模块参数
+
+补充说明：
+
+- 配置文件格式为 TOML
+- 运行时状态文件格式为 JSON
+- 相对路径基于进程工作目录解析
+- 在定时任务部署场景下，强烈建议使用绝对路径
+
+### 部署建议
+
+推荐使用 `systemd timer` 部署，仓库中已经提供示例文件：
+
+- `deploy/systemd/qb-helper.service.example`
+- `deploy/systemd/qb-helper.timer.example`
+
+这个项目不是 daemon，而是一次性完成任务后退出的脚本。
+
+### 日志格式
+
+日志格式如下：
+
+```text
+timestamp [LEVEL] [module_name] message
+```
+
+例如：
+
+- `[app]` 表示 runner 层日志
+- `[stalled_cleanup]` 表示模块日志
+
+### 退出码
+
+- `0`：执行成功
+- `1`：配置错误、qBittorrent 通信失败、模块失败或状态保存失败
+
+### 许可证
 
 MIT
