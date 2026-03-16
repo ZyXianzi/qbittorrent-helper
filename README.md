@@ -2,12 +2,12 @@
 
 `qBittorrent Helper` 是一个面向运维场景的轻量脚本，用来定时检查 qBittorrent 中的任务并执行自动化清理。
 
-它适合用 `cron` 每 5 分钟运行一次，而不是作为常驻进程部署。
+它适合在 Linux 上由 `systemd timer` 周期性触发运行，而不是作为常驻进程部署。
 
 ## Features
 
 - 基于 qBittorrent Web API 工作
-- 短生命周期脚本，适合 `cron`
+- 短生命周期脚本，适合 `systemd timer`
 - 支持 JSON 配置
 - 支持模块化扩展
 - 支持全局 `dry_run`
@@ -83,17 +83,115 @@ uv run python main.py --config ./config.json
 
 ## Deployment
 
-推荐部署方式为 Linux `cron`：
+推荐部署方式为 Linux `systemd timer`。
 
-```cron
-*/5 * * * * cd /home/sylvan/qb-cleaner && /usr/bin/env uv run python main.py --config /home/sylvan/qb-cleaner/config.json
+仓库中提供了示例文件：
+
+- `deploy/systemd/qb-helper.service.example`
+- `deploy/systemd/qb-helper.timer.example`
+
+### 1. 准备目录与配置
+
+假设项目部署在：
+
+```text
+/home/youruser/qbittorrent-helper
+```
+
+先安装依赖并准备配置：
+
+```bash
+cd /home/youruser/qbittorrent-helper
+uv sync
+cp config.example.json config.json
 ```
 
 建议：
 
-- 先用 `dry_run` 上线观察
+- 将 `config.json` 里的日志和状态文件路径改为绝对路径
+- 先把 `runtime.dry_run` 设为 `true`
 - 确保运行用户对日志目录和状态文件目录有写权限
-- 将 `candidate_seconds` 和 `delete_seconds` 设得保守一些
+
+### 2. 安装 service 和 timer
+
+复制示例文件到 `systemd` 目录：
+
+```bash
+sudo cp deploy/systemd/qb-helper.service.example /etc/systemd/system/qb-helper.service
+sudo cp deploy/systemd/qb-helper.timer.example /etc/systemd/system/qb-helper.timer
+```
+
+然后按实际部署修改下面这些字段：
+
+- `User`
+- `Group`
+- `WorkingDirectory`
+- `ExecStart`
+
+`ExecStart` 推荐直接指向虚拟环境中的 Python：
+
+```ini
+ExecStart=/home/youruser/qbittorrent-helper/.venv/bin/python /home/youruser/qbittorrent-helper/main.py --config /home/youruser/qbittorrent-helper/config.json
+```
+
+### 3. 启用定时器
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now qb-helper.timer
+```
+
+查看定时器是否已注册：
+
+```bash
+systemctl list-timers qb-helper.timer
+```
+
+### 4. 手动测试一次 service
+
+在真正依赖定时器之前，建议先手动跑一次：
+
+```bash
+sudo systemctl start qb-helper.service
+sudo systemctl status qb-helper.service
+```
+
+查看日志：
+
+```bash
+journalctl -u qb-helper.service -n 100 --no-pager
+```
+
+### 5. 日常运维命令
+
+重新加载 unit 文件：
+
+```bash
+sudo systemctl daemon-reload
+```
+
+重启 timer：
+
+```bash
+sudo systemctl restart qb-helper.timer
+```
+
+停止 timer：
+
+```bash
+sudo systemctl disable --now qb-helper.timer
+```
+
+### Why systemd timer Instead of cron
+
+相比 `cron`，`systemd timer` 更适合这个项目：
+
+- 可以明确指定 `WorkingDirectory`、运行用户和启动命令
+- 可以通过 `journalctl` 直接查看执行日志和失败原因
+- `Persistent=true` 可以在机器错过执行窗口后补跑
+- 更适合把部署方式纳入版本管理和运维文档
+
+这个项目仍然是短生命周期任务。`systemd` 这里只负责定时拉起它，不代表要把它改成常驻服务。
 
 ## Project Layout
 

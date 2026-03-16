@@ -2,7 +2,7 @@
 
 ## Project Purpose
 
-This project is a qBittorrent helper designed to run as a cron job every 5 minutes.
+This project is a qBittorrent helper designed to run as a short-lived scheduled job every 5 minutes.
 Its responsibilities are operational and maintenance-oriented:
 
 - inspect current torrents from qBittorrent
@@ -16,7 +16,7 @@ The current built-in module is `stalled_cleanup`, which tracks torrents in `stal
 
 - Entrypoint: `main.py`
 - Main runner: `qb_helper/runner.py`
-- Expected execution mode: short-lived process invoked by cron
+- Expected execution mode: short-lived process invoked by a scheduler such as `systemd timer` or cron
 - Typical deployment command:
   - `/path/to/.venv/bin/python /path/to/main.py --config /path/to/config.json`
 
@@ -76,7 +76,7 @@ Important notes:
 
 - `.env` is no longer used.
 - Relative paths in config are resolved relative to the current working directory of the process.
-- For cron deployments, prefer absolute paths or `cd` into the project directory before execution.
+- For scheduled deployments, prefer absolute paths or set the working directory explicitly before execution.
 
 ## Logging Conventions
 
@@ -93,7 +93,7 @@ Examples:
 
 ### Log retention
 
-This project runs as a short-lived cron task, so retention cannot rely only on standard timed rotation behavior.
+This project runs as a short-lived scheduled task, so retention cannot rely only on standard timed rotation behavior.
 
 Current implementation:
 
@@ -193,14 +193,21 @@ Do not introduce module-specific dry-run behavior unless there is a clear operat
 ## Deployment Assumptions
 
 - Python is typically provided from `.venv/bin/python`
-- execution is via cron on Linux
+- execution is via a Linux scheduler, with `systemd timer` preferred and cron still supported
 - the process is expected to finish quickly
 - qBittorrent connectivity errors should fail the run clearly in logs
 
-Recommended cron shape:
+Recommended `systemd` deployment shape:
 
-```cron
-*/5 * * * * cd /home/sylvan/qb-cleaner && /home/sylvan/qb-cleaner/.venv/bin/python /home/sylvan/qb-cleaner/main.py --config /home/sylvan/qb-cleaner/config.json
+```ini
+[Service]
+Type=oneshot
+WorkingDirectory=/home/sylvan/qb-cleaner
+ExecStart=/home/sylvan/qb-cleaner/.venv/bin/python /home/sylvan/qb-cleaner/main.py --config /home/sylvan/qb-cleaner/config.json
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
 ```
 
 ## Practical Rules For Future Changes

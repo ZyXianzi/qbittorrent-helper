@@ -1,0 +1,10 @@
+[Unit]
+Description=Run qBittorrent Helper every 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+Unit=qb-helper.service
+
+[Install]
+WantedBy=timers.target
