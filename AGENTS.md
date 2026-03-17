@@ -16,6 +16,7 @@ The current built-in modules are:
 
 - `stalled_cleanup`, which tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold
 - `disk_space_cleanup`, which deletes the largest completed torrent when free disk space falls below a configured threshold and then resumes errored downloads
+- `value_retention_cleanup`, which scores completed torrents by recent upload yield, activity, size, and cohort policy so high-value seeds can stay longer and low-value seeds can be deleted proactively or under disk pressure
 - `tag_share_limit`, which applies configured `seedingTimeLimit` values to torrents whose tags match configured rules
 
 ## Runtime Model
@@ -62,6 +63,8 @@ This is not a daemon. Design changes should assume the process starts fresh on e
   - first built-in module
 - `qb_helper/modules/disk_space_cleanup.py`
   - disk pressure cleanup and download resume module
+- `qb_helper/modules/value_retention_cleanup.py`
+  - unified value-based retention and disk pressure cleanup module
 - `qb_helper/modules/tag_share_limit.py`
   - tag-based seeding time limit enforcement
 - `qb_helper/modules/__init__.py`
@@ -138,6 +141,8 @@ Rules:
 
 Do not make modules overwrite each other’s state.
 
+`value_retention_cleanup` stores hourly upload snapshots under its own module key. Keep that history lightweight and module-local.
+
 ## Module System
 
 Modules are configured under `modules.<module_name>`.
@@ -161,6 +166,17 @@ Module input comes from `ModuleContext`:
 
 Module output is `ModuleResult(state=...)`.
 
+The shared `Torrent` model now includes additional qBittorrent fields used by advanced retention logic, including:
+
+- `completion_on`
+- `last_activity`
+- `uploaded`
+- `upspeed`
+- `ratio`
+- `seeding_time`
+- `category`
+- `tracker`
+
 ### Expectations for new modules
 
 When adding a new module:
@@ -171,6 +187,8 @@ When adding a new module:
 4. log through the provided module logger
 5. return only that module’s next state
 6. add the module to `MODULE_REGISTRY`
+
+If a module overlaps with `value_retention_cleanup` on retention or low-space deletion, treat `value_retention_cleanup` as the higher-level policy engine and avoid conflicting cleanup decisions for the same torrent set.
 
 ### Error handling guidance
 

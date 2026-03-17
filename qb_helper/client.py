@@ -41,9 +41,17 @@ class QBittorrentClient:
                 state=item.get("state", ""),
                 progress=float(item.get("progress", 0.0)),
                 added_on=int(item.get("added_on", 0)),
+                completion_on=int(item.get("completion_on", 0)),
+                last_activity=int(item.get("last_activity", 0)),
                 size=int(item.get("size", 0)),
                 amount_left=int(item.get("amount_left", 0)),
+                uploaded=int(item.get("uploaded", 0)),
+                upspeed=int(item.get("upspeed", 0)),
+                ratio=float(item.get("ratio", 0.0)),
+                seeding_time=int(item.get("seeding_time", 0)),
                 tags=item.get("tags", "") or "",
+                category=item.get("category", "") or "",
+                tracker=item.get("tracker", "") or "",
                 seeding_time_limit=int(item.get("seeding_time_limit", -2)),
             )
             for item in raw_items

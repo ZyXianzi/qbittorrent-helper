@@ -22,6 +22,7 @@ The built-in modules today are:
 
 - `stalled_cleanup`: tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold
 - `disk_space_cleanup`: deletes the largest completed torrent when free disk space drops below a configured threshold, then resumes errored downloads
+- `value_retention_cleanup`: scores completed torrents by recent upload yield, activity, size, and cohort policy to keep high-value seeds longer and delete low-value seeds proactively or under disk pressure
 - `tag_share_limit`: applies configured `seedingTimeLimit` values to torrents whose tags match configured rules
 
 ## Features
@@ -156,6 +157,74 @@ Default example behavior:
 
 This module is stateless. It is intended for environments where low disk space can leave downloads stuck in an error state until enough space is reclaimed.
 
+### `value_retention_cleanup`
+
+Scores completed torrents with one shared policy engine so the same decision model can be used for:
+
+- routine post-seeding cleanup after a cohort's base seed time
+- disk pressure cleanup when free space falls below a threshold
+- automatic extension of high-value torrents up to a configured max seed time
+
+Behavior:
+
+- classifies each completed torrent into the first matching policy
+- records lightweight hourly upload snapshots in module state
+- computes value from recent upload per GiB, 24h upload per GiB, current upload speed, idle time, and size penalty
+- protects torrents by tag, category, or tracker substring
+- deletes low-value torrents after their base seed time
+- when free space is low, deletes the lowest-value torrents until the target free-space level is estimated to be reached
+- optionally resumes errored downloads after cleanup
+
+Recommended use:
+
+- use this as the primary retention and low-space cleanup module for upload-focused boxes with small disks
+- avoid enabling `disk_space_cleanup` for the same workload at the same time, because `value_retention_cleanup` already owns the smarter low-space decision
+
+Value scoring model:
+
+- the module only evaluates completed torrents
+- each torrent uses the first matching policy from `policies`; if none match, `default_policy` is used
+- the module stores hourly `uploaded` snapshots and calculates upload deltas over `recent_window_hours` and `long_window_hours`
+- protection rules are checked before deletion; matching `protected_tags`, `protected_categories`, or `protected_tracker_contains` prevent automatic deletion
+
+Current score formula:
+
+```text
+score =
+  policy.priority
+  + score_weights.recent_upload_per_gib * recent_uploaded_per_gib
+  + score_weights.long_upload_per_gib * long_uploaded_per_gib
+  + score_weights.current_upspeed_mib * current_upspeed_mib
+  - score_weights.idle_hours * idle_hours
+  - score_weights.size_root * sqrt(size_gib)
+```
+
+Term definitions:
+
+- `policy.priority`: cohort prior configured per policy; use this to favor higher-value groups such as adult large packs
+- `recent_uploaded_per_gib`: uploaded bytes during `recent_window_hours`, converted to GiB and divided by torrent size in GiB
+- `long_uploaded_per_gib`: uploaded bytes during `long_window_hours`, converted to GiB and divided by torrent size in GiB
+- `current_upspeed_mib`: current qBittorrent upload speed in MiB/s
+- `idle_hours`: hours since `last_activity`
+- `sqrt(size_gib)`: size penalty that grows with torrent size, but less aggressively than a linear penalty
+
+Retention and deletion flow:
+
+- if `delete_low_value_after_base_seed = true`, torrents that have reached `base_seed_hours` are eligible for deletion when their score is below `min_score_to_keep`
+- torrents that have reached `max_seed_hours` are eligible for deletion regardless of score
+- if free space is below `min_free_space_gb`, the module keeps deleting from lowest-value to highest-value until the estimated free space reaches `target_free_space_gb` or `max_deletions_per_run` is hit
+- deletion priority is ordered as:
+  1. torrents beyond `max_seed_hours`
+  2. torrents beyond `base_seed_hours` and below `min_score_to_keep`
+  3. remaining unprotected torrents during disk pressure
+- within the same priority tier, lower score is deleted first; if scores are similar, larger and older seeds are favored for deletion
+
+Operational notes:
+
+- the first few runs have limited history, so the 6h and 24h upload terms become more informative after the module has been running for a while
+- for reliable cohort selection, prefer qBittorrent `category` for major groups and reserve tags for overlays such as `manual-keep`
+- if other automation already deletes torrents after a fixed time, disable that policy so this module can make the final retention decision
+
 ### `tag_share_limit`
 
 Applies a configured `seedingTimeLimit` to torrents when their tags match configured rules.
@@ -185,6 +254,7 @@ Notes:
 - TOML supports UTF-8, so Chinese tag names can be written directly
 - if a tag contains spaces or special characters, quote the key
 - the tag text must exactly match the tag configured in qBittorrent
+- if you are using `value_retention_cleanup` as the main retention controller, keep `tag_share_limit` only for separate stop-seeding rules that should not drive deletion
 
 ## Execution Model
 

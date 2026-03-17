@@ -24,9 +24,17 @@ class TorrentOverrides(TypedDict, total=False):
     state: str
     progress: float
     added_on: int
+    completion_on: int
+    last_activity: int
     size: int
     amount_left: int
+    uploaded: int
+    upspeed: int
+    ratio: float
+    seeding_time: int
     tags: str
+    category: str
+    tracker: str
     seeding_time_limit: int
 
 
@@ -41,9 +49,17 @@ def make_torrent() -> Callable[..., Torrent]:
             "state": "downloading",
             "progress": 0.5,
             "added_on": 1,
+            "completion_on": 0,
+            "last_activity": 0,
             "size": 1024,
             "amount_left": 512,
+            "uploaded": 0,
+            "upspeed": 0,
+            "ratio": 0.0,
+            "seeding_time": 0,
             "tags": "",
+            "category": "",
+            "tracker": "",
             "seeding_time_limit": -2,
         }
         values.update(overrides)
