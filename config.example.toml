@@ -23,12 +23,6 @@ candidate_seconds = 3600
 delete_seconds = 7200
 candidate_tag = "stalled-long"
 
-[modules.disk_space_cleanup]
-enabled = false
-
-[modules.disk_space_cleanup.options]
-min_free_space_gb = 20
-
 [modules.value_retention_cleanup]
 enabled = false
 
@@ -85,10 +79,3 @@ priority = 6.0
 base_seed_hours = 24
 max_seed_hours = 72
 min_score_to_keep = 1.5
-
-[modules.tag_share_limit]
-enabled = false
-
-[modules.tag_share_limit.options.tag_seeding_time_limit_minutes]
-keep-1d = 1440
-keep-7d = 10080

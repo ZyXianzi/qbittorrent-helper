@@ -35,7 +35,6 @@ class TorrentOverrides(TypedDict, total=False):
     tags: str
     category: str
     tracker: str
-    seeding_time_limit: int
 
 
 @pytest.fixture
@@ -60,7 +59,6 @@ def make_torrent() -> Callable[..., Torrent]:
             "tags": "",
             "category": "",
             "tracker": "",
-            "seeding_time_limit": -2,
         }
         values.update(overrides)
         return Torrent(**values)

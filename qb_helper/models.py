@@ -21,4 +21,3 @@ class Torrent:
     tags: str
     category: str
     tracker: str
-    seeding_time_limit: int

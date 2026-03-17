@@ -15,9 +15,7 @@ Its responsibilities are operational and maintenance-oriented:
 The current built-in modules are:
 
 - `stalled_cleanup`, which tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold
-- `disk_space_cleanup`, which deletes the largest completed torrent when free disk space falls below a configured threshold and then resumes errored downloads
 - `value_retention_cleanup`, which scores completed torrents by recent upload yield, activity, size, and cohort policy so high-value seeds can stay longer and low-value seeds can be deleted proactively or under disk pressure
-- `tag_share_limit`, which applies configured `seedingTimeLimit` values to torrents whose tags match configured rules
 
 ## Runtime Model
 
@@ -61,12 +59,8 @@ This is not a daemon. Design changes should assume the process starts fresh on e
   - module context and module result contracts
 - `qb_helper/modules/stalled_cleanup.py`
   - first built-in module
-- `qb_helper/modules/disk_space_cleanup.py`
-  - disk pressure cleanup and download resume module
 - `qb_helper/modules/value_retention_cleanup.py`
   - unified value-based retention and disk pressure cleanup module
-- `qb_helper/modules/tag_share_limit.py`
-  - tag-based seeding time limit enforcement
 - `qb_helper/modules/__init__.py`
   - module registry
 
