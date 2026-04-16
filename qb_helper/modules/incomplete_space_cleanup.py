@@ -40,25 +40,26 @@ class IncompleteSpaceCleanupModule:
                 "value_retention_cleanup runtime missing target_free_space_bytes"
             )
 
-        context.logger.info(
-            "Incomplete space cleanup check: free=%.2f GiB | target=%.2f GiB | value_retention_triggered=%s",
-            _bytes_to_gib(free_space),
-            _bytes_to_gib(target_free_space_bytes),
-            triggered_by_value_retention,
-        )
-
         if not triggered_by_value_retention:
             context.logger.info(
-                "Skipping incomplete cleanup because %s did not report disk-pressure cleanup this run",
+                "Not triggered: %s did not report disk-pressure cleanup this run",
                 self._trigger_module,
             )
             return ModuleResult(state={}, runtime={"deleted_count": 0})
 
         if free_space >= target_free_space_bytes:
             context.logger.info(
-                "Skipping incomplete cleanup because free space already meets target"
+                "Not triggered: free space already meets target | free=%.2f GiB | target=%.2f GiB",
+                _bytes_to_gib(free_space),
+                _bytes_to_gib(target_free_space_bytes),
             )
             return ModuleResult(state={}, runtime={"deleted_count": 0})
+
+        context.logger.info(
+            "Incomplete space cleanup triggered: free=%.2f GiB | target=%.2f GiB",
+            _bytes_to_gib(free_space),
+            _bytes_to_gib(target_free_space_bytes),
+        )
 
         candidates = sorted(
             (
