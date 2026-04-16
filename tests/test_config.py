@@ -28,6 +28,11 @@ rotate_interval = 1
 state_file = "./data/state.json"
 dry_run = true
 
+[protection]
+tags = ["manual-keep"]
+categories = ["do-not-delete"]
+tracker_contains = ["viptracker"]
+
 [modules.stalled_cleanup]
 enabled = true
 
@@ -46,6 +51,9 @@ candidate_tag = "stalled-long"
     assert config.logging.level == "INFO"
     assert config.runtime.state_file == Path("./data/state.json")
     assert config.runtime.dry_run is True
+    assert config.protection.tags == ("manual-keep",)
+    assert config.protection.categories == ("do-not-delete",)
+    assert config.protection.tracker_contains == ("viptracker",)
     assert config.modules["stalled_cleanup"].enabled is True
     assert config.modules["stalled_cleanup"].options == {
         "candidate_seconds": 300,
@@ -74,6 +82,11 @@ rotate_interval = 1
 [runtime]
 state_file = "./data/state.json"
 dry_run = true
+
+[protection]
+tags = []
+categories = []
+tracker_contains = []
 
 [modules.stalled_cleanup]
 enabled = "yes"
@@ -107,6 +120,11 @@ rotate_interval = 1
 [runtime]
 state_file = "./data/state.json"
 dry_run = true
+
+[protection]
+tags = ["manual-keep"]
+categories = ["do-not-delete"]
+tracker_contains = []
 
 [modules.value_retention_cleanup]
 enabled = true

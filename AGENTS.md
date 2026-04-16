@@ -2,6 +2,12 @@
 
 Always use Context7 when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
 
+When work can be parallelized:
+
+- if a task can be split into clearly bounded parallel subtasks, proactively create `worker` subagents to maximize speed
+- keep worker ownership disjoint where possible
+- avoid duplicating the parent agent's work
+
 ## Project Purpose
 
 This project is a qBittorrent helper designed to run as a short-lived scheduled job every 5 minutes.
@@ -12,10 +18,10 @@ Its responsibilities are operational and maintenance-oriented:
 - log what happened
 - persist lightweight module state between runs
 
-The current built-in modules are:
+The current built-in configurable modules are:
 
 - `stalled_cleanup`, which tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold
-- `value_retention_cleanup`, which scores completed torrents by recent upload yield, activity, size, and cohort policy so high-value seeds can stay longer and low-value seeds can be deleted proactively or under disk pressure
+- `value_retention_cleanup`, which scores completed torrents by recent upload yield, activity, size, and cohort policy so high-value seeds can stay longer and low-value seeds can be deleted proactively or under disk pressure, then automatically follows up with incomplete-torrent cleanup if completed-seed cleanup still cannot recover enough free space
 
 ## Runtime Model
 
@@ -36,7 +42,7 @@ This is not a daemon. Design changes should assume the process starts fresh on e
 3. runner initializes logging
 4. runner loads persisted state from disk
 5. runner logs into qBittorrent and fetches torrent list once
-6. runner executes each enabled module
+6. runner executes each enabled module plus any built-in follow-up cleanup steps owned by that module
 7. runner writes next state back to disk
 
 ### Package layout
@@ -60,7 +66,9 @@ This is not a daemon. Design changes should assume the process starts fresh on e
 - `qb_helper/modules/stalled_cleanup.py`
   - first built-in module
 - `qb_helper/modules/value_retention_cleanup.py`
-  - unified value-based retention and disk pressure cleanup module
+  - unified value-based retention and disk pressure cleanup module, including the resume-after-cleanup workflow
+- `qb_helper/modules/incomplete_space_cleanup.py`
+  - internal emergency incomplete-torrent cleanup follow-up used by `value_retention_cleanup`
 - `qb_helper/modules/__init__.py`
   - module registry
 
@@ -76,6 +84,8 @@ Top-level sections:
   - log file path, level, retention, rotation settings
 - `runtime`
   - state file path, global `dry_run`
+- `protection`
+  - shared deletion safeguards by tag, category, and tracker substring; deletion modules must always respect these rules
 - `modules`
   - module-specific enable flag and options
 
@@ -136,6 +146,7 @@ Rules:
 Do not make modules overwrite each other’s state.
 
 `value_retention_cleanup` stores hourly upload snapshots under its own module key. Keep that history lightweight and module-local.
+`incomplete_space_cleanup` is an internal stateless follow-up and should continue returning an empty state object unless a future design clearly requires module-local history.
 
 ## Module System
 
@@ -157,8 +168,13 @@ Module input comes from `ModuleContext`:
 - `dry_run`
 - `logger`
 - `now`
+- `protection`
+  - shared protection rules from top-level config; deletion modules should use this as the baseline safeguard set
+- `module_runtime`
+  - runtime-only metadata emitted by earlier modules during the same helper run; use this for same-run follow-up coordination instead of persisting cross-module flags into JSON state
 
 Module output is `ModuleResult(state=...)`.
+Modules may also return lightweight runtime metadata for later modules in the same run; this metadata is not persisted to the state file.
 
 The shared `Torrent` model now includes additional qBittorrent fields used by advanced retention logic, including:
 
@@ -183,6 +199,9 @@ When adding a new module:
 6. add the module to `MODULE_REGISTRY`
 
 If a module overlaps with `value_retention_cleanup` on retention or low-space deletion, treat `value_retention_cleanup` as the higher-level policy engine and avoid conflicting cleanup decisions for the same torrent set.
+`incomplete_space_cleanup` is intentionally the built-in follow-up layer after `value_retention_cleanup`; do not expose it as a separately configured module unless the architecture is intentionally changing.
+For deletion modules, prefer shared top-level `protection` config for common exclusions; module-local protection options should only be used for module-specific additions.
+When `resume_error_downloads_after_cleanup` is enabled, keep the ordering as: completed-seed cleanup, internal incomplete follow-up cleanup if needed, then resume errored downloads.
 
 ### Error handling guidance
 

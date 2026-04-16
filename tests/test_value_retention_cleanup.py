@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, call
 
+from qb_helper.config import ProtectionConfig
 from qb_helper.modules.value_retention_cleanup import ValueRetentionCleanupModule
 
 
@@ -192,7 +193,11 @@ def test_value_retention_cleanup_respects_protected_tags_under_pressure(
 ) -> None:
     now = 500 * 3600
     gib = 1024**3
-    module = ValueRetentionCleanupModule(make_options())
+    options = make_options()
+    options["protected_tags"] = []
+    options["protected_categories"] = []
+    options["protected_tracker_contains"] = []
+    module = ValueRetentionCleanupModule(options)
     client = MagicMock()
     client.get_free_space_on_disk.return_value = 20 * gib
     client.get_torrents.return_value = []
@@ -221,7 +226,16 @@ def test_value_retention_cleanup_respects_protected_tags_under_pressure(
     )
 
     module.run(
-        make_context(client=client, torrents=[protected, disposable], now=now),
+        make_context(
+            client=client,
+            torrents=[protected, disposable],
+            now=now,
+            protection=ProtectionConfig(
+                tags=("manual-keep",),
+                categories=("do-not-delete",),
+                tracker_contains=(),
+            ),
+        ),
         previous_state={},
     )
 

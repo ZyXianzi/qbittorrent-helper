@@ -433,6 +433,7 @@ class ValueRetentionCleanupModule:
             }
             evaluations.append(
                 self._evaluate_torrent(
+                    context=context,
                     torrent=torrent,
                     policy=policy,
                     samples=samples,
@@ -441,6 +442,7 @@ class ValueRetentionCleanupModule:
             )
 
         free_space = context.client.get_free_space_on_disk()
+        space_pressure_triggered = free_space < self.settings.min_free_space_bytes
         context.logger.info(
             "Value retention check: free=%.2f GiB | threshold=%d GiB | target=%.2f GiB | tracked_complete=%d",
             _bytes_to_gib(free_space),
@@ -458,7 +460,16 @@ class ValueRetentionCleanupModule:
                 "Done. deleted=0 | dry_run_deleted=0 | protected=%d",
                 sum(1 for evaluation in evaluations if evaluation.is_protected),
             )
-            return ModuleResult(state={"torrents": next_tracked_state})
+            return ModuleResult(
+                state={"torrents": next_tracked_state},
+                runtime={
+                    "space_pressure_triggered": space_pressure_triggered,
+                    "estimated_free_space_bytes": free_space,
+                    "target_free_space_bytes": self.settings.target_free_space_bytes,
+                    "deleted_count": 0,
+                    "resume_error_downloads_after_cleanup": self.settings.resume_error_downloads_after_cleanup,
+                },
+            )
 
         deleted_hashes: set[str] = set()
         deleted_count = 0
@@ -508,9 +519,6 @@ class ValueRetentionCleanupModule:
                     exc,
                 )
 
-        if deleted_count > 0 and self.settings.resume_error_downloads_after_cleanup:
-            self._resume_error_downloads(context)
-
         if deleted_hashes:
             next_tracked_state = {
                 torrent_hash: state
@@ -526,7 +534,16 @@ class ValueRetentionCleanupModule:
             _bytes_to_gib(free_space),
             _bytes_to_gib(estimated_free_space),
         )
-        return ModuleResult(state={"torrents": next_tracked_state})
+        return ModuleResult(
+            state={"torrents": next_tracked_state},
+            runtime={
+                "space_pressure_triggered": space_pressure_triggered,
+                "estimated_free_space_bytes": estimated_free_space,
+                "target_free_space_bytes": self.settings.target_free_space_bytes,
+                "deleted_count": deleted_count,
+                "resume_error_downloads_after_cleanup": self.settings.resume_error_downloads_after_cleanup,
+            },
+        )
 
     def _load_tracked_state(
         self, previous_state: dict[str, Any]
@@ -590,6 +607,7 @@ class ValueRetentionCleanupModule:
     def _evaluate_torrent(
         self,
         *,
+        context: ModuleContext,
         torrent: Torrent,
         policy: RetentionPolicy,
         samples: list[UploadSample],
@@ -648,7 +666,7 @@ class ValueRetentionCleanupModule:
             long_uploaded_per_gib=long_uploaded_per_gib,
             upspeed_mib=upspeed_mib,
             idle_hours=idle_hours,
-            protected_reason=self._protected_reason(torrent),
+            protected_reason=self._protected_reason(context, torrent),
         )
 
     def _uploaded_in_window(
@@ -671,18 +689,46 @@ class ValueRetentionCleanupModule:
 
         return max(current_uploaded - baseline, 0)
 
-    def _protected_reason(self, torrent: Torrent) -> str | None:
+    def _merged_protection(
+        self, context: ModuleContext
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        return (
+            tuple(
+                dict.fromkeys([*context.protection.tags, *self.settings.protected_tags])
+            ),
+            tuple(
+                dict.fromkeys(
+                    [
+                        *context.protection.categories,
+                        *self.settings.protected_categories,
+                    ]
+                )
+            ),
+            tuple(
+                dict.fromkeys(
+                    [
+                        *context.protection.tracker_contains,
+                        *self.settings.protected_tracker_contains,
+                    ]
+                )
+            ),
+        )
+
+    def _protected_reason(self, context: ModuleContext, torrent: Torrent) -> str | None:
+        protected_tags, protected_categories, protected_tracker_contains = (
+            self._merged_protection(context)
+        )
         torrent_tags = _split_tags(torrent.tags)
-        for tag in self.settings.protected_tags:
+        for tag in protected_tags:
             if tag in torrent_tags:
                 return f"protected_tag:{tag}"
 
-        for category in self.settings.protected_categories:
+        for category in protected_categories:
             if torrent.category == category:
                 return f"protected_category:{category}"
 
         tracker_text = torrent.tracker.lower()
-        for tracker_value in self.settings.protected_tracker_contains:
+        for tracker_value in protected_tracker_contains:
             if tracker_value.lower() in tracker_text:
                 return f"protected_tracker:{tracker_value}"
 
@@ -763,37 +809,39 @@ class ValueRetentionCleanupModule:
             tier = 1
         return (tier, evaluation.score, -evaluation.size_gib, -evaluation.seed_hours)
 
-    def _resume_error_downloads(self, context: ModuleContext) -> None:
-        try:
-            refreshed_torrents = context.client.get_torrents()
-        except Exception as exc:
-            context.logger.exception(
-                "Failed to refresh torrents after value retention cleanup: %s", exc
-            )
-            return
 
-        error_downloads = [
-            torrent
-            for torrent in refreshed_torrents
-            if torrent.state == "error" and torrent.amount_left > 0
-        ]
-        if not error_downloads:
-            context.logger.info(
-                "No errored downloads found after value retention cleanup"
-            )
-            return
+def resume_error_downloads_after_cleanup(context: ModuleContext) -> None:
+    logger = context.logger
+    client = context.client
 
-        hashes = [torrent.hash for torrent in error_downloads]
-        names = ", ".join(torrent.name for torrent in error_downloads)
-        try:
-            context.client.start_torrents(hashes)
-            context.logger.info(
-                "Resumed errored downloads after value retention cleanup: count=%d | torrents=%s",
-                len(error_downloads),
-                names,
-            )
-        except Exception as exc:
-            context.logger.exception(
-                "Failed to resume errored downloads after value retention cleanup: %s",
-                exc,
-            )
+    try:
+        refreshed_torrents = client.get_torrents()
+    except Exception as exc:
+        logger.exception(
+            "Failed to refresh torrents after low-space cleanup follow-up: %s", exc
+        )
+        return
+
+    error_downloads = [
+        torrent
+        for torrent in refreshed_torrents
+        if torrent.state == "error" and torrent.amount_left > 0
+    ]
+    if not error_downloads:
+        logger.info("No errored downloads found after low-space cleanup follow-up")
+        return
+
+    hashes = [torrent.hash for torrent in error_downloads]
+    names = ", ".join(torrent.name for torrent in error_downloads)
+    try:
+        client.start_torrents(hashes)
+        logger.info(
+            "Resumed errored downloads after low-space cleanup follow-up: count=%d | torrents=%s",
+            len(error_downloads),
+            names,
+        )
+    except Exception as exc:
+        logger.exception(
+            "Failed to resume errored downloads after low-space cleanup follow-up: %s",
+            exc,
+        )

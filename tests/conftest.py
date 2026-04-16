@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 if TYPE_CHECKING:
+    from qb_helper.config import ProtectionConfig
     from qb_helper.models import Torrent
     from qb_helper.modules.base import ModuleContext
 
@@ -75,7 +76,10 @@ def make_context() -> Callable[..., ModuleContext]:
         dry_run: bool = False,
         now: int = 1_000,
         module_name: str = "test_module",
+        protection: ProtectionConfig | None = None,
+        module_runtime: dict[str, dict[str, object]] | None = None,
     ) -> ModuleContext:
+        from qb_helper.config import ProtectionConfig
         from qb_helper.modules.base import ModuleContext
 
         logger = logging.getLogger(f"tests.{module_name}")
@@ -86,6 +90,9 @@ def make_context() -> Callable[..., ModuleContext]:
             dry_run=dry_run,
             logger=logging.LoggerAdapter(logger, {"module_name": module_name}),
             now=now,
+            protection=protection
+            or ProtectionConfig(tags=(), categories=(), tracker_contains=()),
+            module_runtime=module_runtime or {},
         )
 
     return _make_context

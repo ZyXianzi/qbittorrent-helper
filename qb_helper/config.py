@@ -30,6 +30,13 @@ class RuntimeConfig:
 
 
 @dataclass(frozen=True)
+class ProtectionConfig:
+    tags: tuple[str, ...]
+    categories: tuple[str, ...]
+    tracker_contains: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ModuleConfig:
     enabled: bool
     options: dict[str, Any]
@@ -40,6 +47,7 @@ class AppConfig:
     qbittorrent: QBittorrentConfig
     logging: LoggingConfig
     runtime: RuntimeConfig
+    protection: ProtectionConfig
     modules: dict[str, ModuleConfig]
 
 
@@ -64,10 +72,26 @@ def _expect_int(value: Any, label: str) -> int:
     return value
 
 
+def _expect_list(value: Any, label: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise ValueError(f"{label} must be an array")
+    return value
+
+
 def _expect_str(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be a non-empty string")
     return value
+
+
+def _expect_string_list(value: Any, label: str) -> tuple[str, ...]:
+    items = _expect_list(value, label)
+    cleaned: list[str] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{label}[{index}] must be a non-empty string")
+        cleaned.append(item.strip())
+    return tuple(cleaned)
 
 
 def load_config(path: Path) -> AppConfig:
@@ -78,6 +102,7 @@ def load_config(path: Path) -> AppConfig:
     qb_section = _expect_dict(root.get("qbittorrent"), "qbittorrent")
     logging_section = _expect_dict(root.get("logging"), "logging")
     runtime_section = _expect_dict(root.get("runtime"), "runtime")
+    protection_section = _expect_dict(root.get("protection", {}), "protection")
     modules_section = _expect_dict(root.get("modules"), "modules")
 
     modules: dict[str, ModuleConfig] = {}
@@ -124,6 +149,19 @@ def load_config(path: Path) -> AppConfig:
                 _expect_str(runtime_section.get("state_file"), "runtime.state_file")
             ).expanduser(),
             dry_run=_expect_bool(runtime_section.get("dry_run"), "runtime.dry_run"),
+        ),
+        protection=ProtectionConfig(
+            tags=_expect_string_list(
+                protection_section.get("tags", []), "protection.tags"
+            ),
+            categories=_expect_string_list(
+                protection_section.get("categories", []),
+                "protection.categories",
+            ),
+            tracker_contains=_expect_string_list(
+                protection_section.get("tracker_contains", []),
+                "protection.tracker_contains",
+            ),
         ),
         modules=modules,
     )

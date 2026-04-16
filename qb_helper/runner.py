@@ -12,6 +12,10 @@ from qb_helper.config import DEFAULT_CONFIG_PATH, AppConfig, load_config
 from qb_helper.logging_utils import get_module_logger, setup_logging
 from qb_helper.modules import MODULE_REGISTRY
 from qb_helper.modules.base import ModuleContext
+from qb_helper.modules.incomplete_space_cleanup import IncompleteSpaceCleanupModule
+from qb_helper.modules.value_retention_cleanup import (
+    resume_error_downloads_after_cleanup,
+)
 from qb_helper.state import load_state, save_state
 
 
@@ -44,6 +48,26 @@ def _create_client(config: AppConfig) -> QBittorrentClient:
     )
 
 
+def _build_module_context(
+    *,
+    client: QBittorrentClient,
+    torrents: list[Any],
+    config: AppConfig,
+    module_logger: logging.LoggerAdapter,
+    now: int,
+    module_runtime: dict[str, dict[str, Any]],
+) -> ModuleContext:
+    return ModuleContext(
+        client=client,
+        torrents=torrents,
+        dry_run=config.runtime.dry_run,
+        logger=module_logger,
+        now=now,
+        protection=config.protection,
+        module_runtime=module_runtime,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
@@ -67,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     next_state: dict[str, Any] = {}
+    module_runtime: dict[str, dict[str, Any]] = {}
     now = int(time.time())
     failed_modules = False
 
@@ -96,16 +121,53 @@ def main(argv: list[str] | None = None) -> int:
         try:
             module = module_class(module_config.options)
             result = module.run(
-                ModuleContext(
+                _build_module_context(
                     client=client,
                     torrents=torrents,
-                    dry_run=config.runtime.dry_run,
-                    logger=module_logger,
+                    config=config,
+                    module_logger=module_logger,
                     now=now,
+                    module_runtime=module_runtime,
                 ),
                 module_state,
             )
             next_state[module_name] = result.state
+            module_runtime[module_name] = result.runtime
+
+            if module_name == "value_retention_cleanup":
+                followup_logger = get_module_logger(
+                    logger, IncompleteSpaceCleanupModule.name
+                )
+                followup = IncompleteSpaceCleanupModule()
+                followup_result = followup.run(
+                    _build_module_context(
+                        client=client,
+                        torrents=torrents,
+                        config=config,
+                        module_logger=followup_logger,
+                        now=now,
+                        module_runtime=module_runtime,
+                    ),
+                    {},
+                )
+                module_runtime[IncompleteSpaceCleanupModule.name] = (
+                    followup_result.runtime
+                )
+
+                if result.runtime.get("resume_error_downloads_after_cleanup") and (
+                    result.runtime.get("deleted_count", 0) > 0
+                    or followup_result.runtime.get("deleted_count", 0) > 0
+                ):
+                    resume_error_downloads_after_cleanup(
+                        _build_module_context(
+                            client=client,
+                            torrents=torrents,
+                            config=config,
+                            module_logger=module_logger,
+                            now=now,
+                            module_runtime=module_runtime,
+                        )
+                    )
         except Exception as exc:
             module_logger.exception("Module execution failed: %s", exc)
             failed_modules = True

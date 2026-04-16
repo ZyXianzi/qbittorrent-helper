@@ -15,6 +15,11 @@ rotate_interval = 1
 state_file = "./data/qb-helper-state.json"
 dry_run = true
 
+[protection]
+tags = ["manual-keep"]
+categories = ["do-not-delete"]
+tracker_contains = []
+
 [modules.stalled_cleanup]
 enabled = true
 
@@ -35,9 +40,6 @@ recent_window_hours = 6
 long_window_hours = 24
 delete_low_value_after_base_seed = true
 resume_error_downloads_after_cleanup = true
-protected_tags = ["manual-keep"]
-protected_categories = ["do-not-delete"]
-protected_tracker_contains = []
 
 [modules.value_retention_cleanup.options.score_weights]
 recent_upload_per_gib = 4.0

@@ -15,13 +15,13 @@ Each run:
 2. loads persisted module state from disk
 3. logs into qBittorrent Web API
 4. fetches the current torrent list once
-5. executes enabled helper modules
+5. executes enabled helper modules, including any built-in follow-up cleanup stages they trigger
 6. writes next state back to disk
 
-The built-in modules today are:
+The built-in configurable modules today are:
 
 - `stalled_cleanup`: tracks torrents in `stalledDL`, tags them after a threshold, and deletes them after a longer threshold
-- `value_retention_cleanup`: scores completed torrents by recent upload yield, activity, size, and cohort policy to keep high-value seeds longer and delete low-value seeds proactively or under disk pressure
+- `value_retention_cleanup`: scores completed torrents by recent upload yield, activity, size, and cohort policy to keep high-value seeds longer and delete low-value seeds proactively or under disk pressure, then automatically falls back to incomplete-torrent cleanup if disk pressure still cannot be resolved
 
 ## Features
 
@@ -119,6 +119,7 @@ Top-level config sections:
 - `qbittorrent`: server URL, credentials, request timeout
 - `logging`: log file path, level, rotation, retention
 - `runtime`: state file path and global `dry_run`
+- `protection`: shared tag/category/tracker rules that all deletion modules must respect
 - `modules`: per-module enable flag and options
 
 Important notes:
@@ -158,7 +159,8 @@ Behavior:
 - protects torrents by tag, category, or tracker substring
 - deletes low-value torrents after their base seed time
 - when free space is low, deletes the lowest-value torrents until the target free-space level is estimated to be reached
-- optionally resumes errored downloads after cleanup
+- if completed-seed cleanup still cannot restore `target_free_space_gb`, automatically follows up by deleting incomplete torrents with the largest current on-disk footprint
+- optionally resumes errored downloads only after both completed-seed cleanup and incomplete follow-up cleanup have finished
 
 Recommended use:
 
@@ -169,7 +171,7 @@ Value scoring model:
 - the module only evaluates completed torrents
 - each torrent uses the first matching policy from `policies`; if none match, `default_policy` is used
 - the module stores hourly `uploaded` snapshots and calculates upload deltas over `recent_window_hours` and `long_window_hours`
-- protection rules are checked before deletion; matching `protected_tags`, `protected_categories`, or `protected_tracker_contains` prevent automatic deletion
+- protection rules are checked before deletion; shared `protection.*` rules always apply, and module-local `protected_*` rules can add extra exclusions when needed
 
 Current score formula:
 
@@ -208,6 +210,7 @@ Operational notes:
 - the first few runs have limited history, so the 6h and 24h upload terms become more informative after the module has been running for a while
 - for reliable cohort selection, prefer qBittorrent `category` for major groups and reserve tags for overlays such as `manual-keep`
 - if other automation already deletes torrents after a fixed time, disable that policy so this module can make the final retention decision
+- incomplete follow-up cleanup is internal to `value_retention_cleanup`; it is not configured as a separate module
 
 ## Execution Model
 
@@ -343,13 +346,13 @@ MIT
 2. 读取磁盘上的模块状态
 3. 登录 qBittorrent Web API
 4. 获取当前 torrent 列表
-5. 执行已启用模块
+5. 执行已启用模块，以及这些模块内部触发的兜底清理步骤
 6. 写回新的状态
 
 当前内置模块：
 
 - `stalled_cleanup`：跟踪 `stalledDL` 状态的种子，达到阈值后打标签，再在更长时间后删除任务及文件
-- `value_retention_cleanup`：对已完成任务按近期上传收益、活跃度、体积和 cohort 策略打分，在日常保种和磁盘压力清理时统一决定保留或删除
+- `value_retention_cleanup`：对已完成任务按近期上传收益、活跃度、体积和 cohort 策略打分，在日常保种和磁盘压力清理时统一决定保留或删除；若清理后仍达不到目标空闲空间，会自动继续按“当前已占用磁盘空间”从大到小删除未完成任务，并在两段清理都完成后再统一尝试恢复 errored downloads
 
 ### 功能特点
 
@@ -407,6 +410,7 @@ uv run python main.py --config ./config.toml
 - `qbittorrent`：服务地址、用户名、密码、超时
 - `logging`：日志路径、级别、轮转、保留策略
 - `runtime`：状态文件路径和全局 `dry_run`
+- `protection`：所有删除类模块共享的保护规则
 - `modules`：模块开关和模块参数
 
 补充说明：
@@ -415,6 +419,7 @@ uv run python main.py --config ./config.toml
 - 运行时状态文件格式为 JSON
 - 相对路径基于进程工作目录解析
 - 在定时任务部署场景下，强烈建议使用绝对路径
+- 未完成任务的兜底清理是 `value_retention_cleanup` 的内建后续步骤，不单独配置
 
 ### 部署建议
 
